@@ -27,7 +27,7 @@ Entity linking is the task of finding and mapping mentions of entities in text (
 
 These steps are often executed by tools that are limited to linking to Wikipedia. **LELA is a modular entity linking system that unites different tools for each step in one unified interface**. Each of the 5 steps (loader → NER → candidate generation → reranking → disambiguation), and even the KB can be chosen from a wide range of pre-configured sources -- with a single config file.
 
-LELA features: 
+LELA features:
 - **A zero-config quickstart** — `git clone && uv sync && uv run python -m lela.cli ...` works on CPU with no model downloads. YAGO 4.5 fetches itself on first use.
 - **Compatibility with any KB** — any JSONL file with `id`, `title`, `description` plugs straight in.
 - **Choice of different modules** — regex/spaCy/GLiNER for NER, BM25/fuzzy/dense for candidates, cross-encoder/embedder rerankers, and vLLM / Hugging Face Transformers / OpenAI-compatible API disambiguators.
@@ -49,7 +49,7 @@ LELA features:
 
 ```bash
 cd lela
-uv sync                            
+uv sync
 uv sync --extra ui                 # + Gradio web UI
 uv sync --extra vllm               # + local vLLM (needs CUDA)
 uv sync --all-extras               # everything
@@ -64,7 +64,7 @@ uv run python -m lela.cli \
 ```bash
 cd lela
 python -m pip install --upgrade pip
-python -m pip install -e .                  
+python -m pip install -e .
 python -m lela.cli --config config/quickstart.json --input data/test/sample_doc.txt --output outputs.jsonl
 ```
 
@@ -136,7 +136,7 @@ python -m lela.cli --config config/quickstart.json --input data/test/sample_doc.
 ```
 
 Replace the config file by your configuration file, and the input file by your input file.
-  
+
 ### Python interface
 
 ```Python
@@ -206,10 +206,23 @@ Cache is keyed by file path, mtime, and size, and lives in `.ner_cache/`.
 If you use LELA in your research, please cite:
 
 ```bibtex
-@inproceedings{lela2026,
-  title     = {LELA: An End-to-End LLM-based Entity Linking Framework with Zero-shot Domain Aadaptation},
-  author    = {Samy Haffoudhi , Nikola Dobričić , Fabian Suchanek , Nils Holzenberger},
-  booktitle = {35th International Joint Conference on Artificial Intelligence (IJCAI-ECAI 2026)},
+@inproceedings{haffoudhi2026lela,
+  title     = {{LELA}: an {LLM}-based Entity Linking Approach with Zero-Shot Domain Adaptation},
+  author    = {Haffoudhi, Samy and Suchanek, Fabian M. and Holzenberger, Nils},
+  booktitle = {The Semantic Web -- ISWC 2026: 25th International Semantic Web Conference,
+               Bari, Italy, October 25--29, 2026, Proceedings},
+  series    = {Lecture Notes in Computer Science},
+  publisher = {Springer},
+  address   = {Cham},
+  year      = {2026},
+  url       = {https://arxiv.org/abs/2601.05192}
+}
+
+@inproceedings{haffoudhi2026lelademo,
+  title     = {{LELA}: An End-to-End {LLM}-based Entity Linking Framework with Zero-shot Domain Adaptation},
+  author    = {Haffoudhi, Samy and Dobri{\v{c}}i{\'{c}}, Nikola and Suchanek, Fabian M. and Holzenberger, Nils},
+  booktitle = {Proceedings of the 35th International Joint Conference on Artificial Intelligence,
+               {IJCAI-ECAI} 2026, Demonstrations Track},
   year      = {2026},
   url       = {https://arxiv.org/abs/2605.26956}
 }
