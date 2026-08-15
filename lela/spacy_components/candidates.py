@@ -11,6 +11,7 @@ Provides factories and components for candidate generation:
 import hashlib
 import logging
 import pickle
+import re
 from pathlib import Path
 from typing import Callable, List, Optional
 
@@ -651,6 +652,12 @@ class FuzzyCandidatesComponent:
     Uses RapidFuzz for efficient fuzzy string matching against KB titles.
     """
 
+    # Peak size of the cdist score matrix. Mentions are scored in batches sized
+    # to fit this, so a document with many mentions cannot blow up memory.
+    SCORE_MATRIX_BUDGET_BYTES = 256 * 2**20
+    # Candidates scoring below this (out of 100) are discarded.
+    SCORE_CUTOFF = 30
+
     def __init__(
         self,
         nlp: Language,
@@ -665,6 +672,7 @@ class FuzzyCandidatesComponent:
         self.kb = None
         self.entities = None
         self.titles = None
+        self._processed_titles = None
 
         # Optional progress callback for fine-grained progress reporting
         self.progress_callback: Optional[ProgressCallback] = None
@@ -677,9 +685,13 @@ class FuzzyCandidatesComponent:
     ):
         """Initialize the component with a knowledge base."""
         _ = progress_callback
+        from rapidfuzz import utils
+
         self.kb = kb
         self.entities = list(kb.all_entities())
         self.titles = [e.title for e in self.entities]
+        # Pre-apply the scorer's processor once, instead of on every mention.
+        self._processed_titles = [utils.default_process(t) for t in self.titles]
 
         logger.info(f"Fuzzy index built over {len(self.entities)} entities")
 
@@ -695,87 +707,77 @@ class FuzzyCandidatesComponent:
 
         entities = list(doc.ents)
         num_entities = len(entities)
-        num_titles = len(self.titles)
-        # Chunk size for sub-entity progress reporting on large KBs
-        CHUNK_SIZE = 500_000
-        use_chunks = num_titles > CHUNK_SIZE
 
         if self.progress_callback:
             self.progress_callback(
                 0.0, f"Generating candidates for {num_entities} entities..."
             )
 
-        for i, ent in enumerate(entities):
-            ent_text = ent.text[:25] + "..." if len(ent.text) > 25 else ent.text
+        # Score every mention against every title with cdist, which threads the
+        # comparisons across cores (rapidfuzz releases the GIL). process.extract
+        # has no such option, so scoring one mention at a time leaves all but one
+        # core idle. float32 keeps the fractional scores that uint8 would round
+        # away, which would otherwise invent ties and change which candidates
+        # survive at the top_k boundary.
+        row_bytes = max(len(self._processed_titles) * 4, 1)
+        batch_size = max(1, self.SCORE_MATRIX_BUDGET_BYTES // row_bytes)
+        for batch_start in range(0, num_entities, batch_size):
+            batch = entities[batch_start : batch_start + batch_size]
 
-            # Report progress if callback is set
             if self.progress_callback and num_entities > 0:
-                progress = i / num_entities
                 self.progress_callback(
-                    progress, f"Generating candidates {i+1}/{num_entities}: {ent_text}"
+                    batch_start / num_entities,
+                    f"Generating candidates {batch_start+1}-{batch_start+len(batch)}"
+                    f"/{num_entities}",
                 )
 
-            if use_chunks:
-                # Process in chunks to allow progress updates during long searches
-                results = []
-                for chunk_start in range(0, num_titles, CHUNK_SIZE):
-                    chunk_end = min(chunk_start + CHUNK_SIZE, num_titles)
-                    chunk_titles = self.titles[chunk_start:chunk_end]
+            queries = [utils.default_process(ent.text) for ent in batch]
+            scores = process.cdist(
+                queries,
+                self._processed_titles,
+                scorer=fuzz.WRatio,
+                processor=None,
+                workers=-1,
+                dtype=np.float32,
+            )
 
-                    chunk_results = process.extract(
-                        ent.text,
-                        chunk_titles,
-                        limit=self.top_k,
-                        scorer=fuzz.WRatio,
-                        processor=utils.default_process,
-                        score_cutoff=30,
-                    )
-                    # Remap indices back to global
-                    results.extend(
-                        (title, score, idx + chunk_start)
-                        for title, score, idx in chunk_results
-                    )
+            for ent, row in zip(batch, scores):
+                # Top-k by score, ties broken by lowest index. Sorting 5.8M
+                # scores per mention would undo the speedup, so partition to
+                # find the k-th best score, take everything strictly above it,
+                # then fill the remaining slots from the tied indices in order
+                # (which is what process.extract would have returned).
+                k = min(self.top_k, row.size)
+                kth = row[np.argpartition(row, -k)[-k:]].min()
+                idx = np.flatnonzero(row > kth)[:k]
+                if idx.size < k:
+                    ties = np.flatnonzero(row == kth)
+                    idx = np.concatenate([idx, ties[: k - idx.size]])
+                idx = idx[np.argsort(-row[idx], kind="stable")]
 
-                    if self.progress_callback and num_entities > 0:
-                        chunk_frac = chunk_end / num_titles
-                        progress = (i + chunk_frac) / num_entities
-                        self.progress_callback(
-                            progress,
-                            f"Generating candidates {i+1}/{num_entities}: {ent_text} ({int(chunk_frac*100)}%)",
+                candidates = []
+                candidate_scores = []
+                for j in idx:
+                    score = float(row[j])
+                    if score < self.SCORE_CUTOFF:
+                        continue
+                    entity = self.entities[j]
+                    # Normalize fuzzy score from 0-100 to 0-1
+                    score_val = score / 100.0
+                    candidates.append(
+                        Candidate(
+                            entity_id=entity.id,
+                            score=score_val,
+                            description=entity.description,
                         )
-
-                # Keep only top_k across all chunks
-                results.sort(key=lambda x: x[1], reverse=True)
-                results = results[: self.top_k]
-            else:
-                results = process.extract(
-                    ent.text,
-                    self.titles,
-                    limit=self.top_k,
-                    scorer=fuzz.WRatio,
-                    processor=utils.default_process,
-                    score_cutoff=30,
-                )
-
-            # Build candidates as List[Candidate] with entity ID
-            candidates = []
-            candidate_scores = []
-            for title, score, idx in results:
-                entity = self.entities[idx]
-                # Normalize fuzzy score from 0-100 to 0-1
-                score_val = float(score) / 100.0
-                candidates.append(
-                    Candidate(
-                        entity_id=entity.id,
-                        score=score_val,
-                        description=entity.description,
                     )
-                )
-                candidate_scores.append(score_val)
+                    candidate_scores.append(score_val)
 
-            ent._.candidates = candidates
-            ent._.candidate_scores = candidate_scores
-            logger.debug(f"Fuzzy-matched {len(candidates)} candidates for '{ent.text}'")
+                ent._.candidates = candidates
+                ent._.candidate_scores = candidate_scores
+                logger.debug(
+                    f"Fuzzy-matched {len(candidates)} candidates for '{ent.text}'"
+                )
 
         # Clear progress callback after processing
         self.progress_callback = None
@@ -809,6 +811,21 @@ class BM25CandidatesComponent:
 
     Alternative to LELA BM25 using the simpler rank-bm25 package.
     """
+
+    # Bumped whenever _tokenize changes, so cached indexes built with the old
+    # tokenization are not reused (they would silently mask the change).
+    TOKENIZER_VERSION = 3
+
+    @staticmethod
+    def _tokenize(text: str) -> List[str]:
+        """Split on non-alphanumerics so KB titles tokenize like mentions.
+
+        KB ids are often underscored ("Albert_Einstein"), which a plain
+        ``split()`` keeps as a single token that no mention can ever match.
+        The underscore must be listed explicitly: ``\\W`` counts it as a word
+        character, so ``\\W+`` alone leaves "albert_einstein" intact.
+        """
+        return [t for t in re.split(r"[\W_]+", text.lower()) if t]
 
     def __init__(
         self,
@@ -854,7 +871,7 @@ class BM25CandidatesComponent:
         cache_hash = None
         cache_file = None
         if cache_dir and hasattr(kb, "identity_hash"):
-            raw = f"bm25:{kb.identity_hash}".encode()
+            raw = f"bm25:v{self.TOKENIZER_VERSION}:{kb.identity_hash}".encode()
             cache_hash = hashlib.sha256(raw).hexdigest()
             idx_dir = Path(cache_dir) / "index"
             idx_dir.mkdir(parents=True, exist_ok=True)
@@ -876,8 +893,7 @@ class BM25CandidatesComponent:
         self.corpus = []
         for entity in self.entities:
             text = f"{entity.title} {entity.description or ''}"
-            tokens = text.lower().split()
-            self.corpus.append(tokens)
+            self.corpus.append(self._tokenize(text))
 
         self.bm25 = BM25Okapi(self.corpus)
         logger.info(f"rank-bm25 index built over {len(self.entities)} entities")
@@ -911,7 +927,7 @@ class BM25CandidatesComponent:
                     progress, f"Generating candidates {i+1}/{num_entities}: {ent_text}"
                 )
 
-            query_tokens = ent.text.lower().split()
+            query_tokens = self._tokenize(ent.text)
             scores = self.bm25.get_scores(query_tokens)
 
             # Get top-k indices

@@ -149,10 +149,16 @@ class CrossEncoderRerankerComponent:
             import torch
             from sentence_transformers import CrossEncoder
 
+            # sentence-transformers wraps pairs in chat messages with
+            # "query"/"document" roles when the tokenizer ships a chat template.
+            # Qwen3's template ignores those roles and renders an empty string,
+            # so the batch tokenizes to zero-length input_ids. We write the chat
+            # markup ourselves, so drop the template to keep the text-pair path.
             logger.info(f"Loading CrossEncoder model: {self.model_name}")
             return CrossEncoder(
                 self.model_name,
                 model_kwargs={"torch_dtype": torch.float16},
+                processor_kwargs={"chat_template": None},
                 trust_remote_code=True,
             )
 
