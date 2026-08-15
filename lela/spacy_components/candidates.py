@@ -11,6 +11,7 @@ Provides factories and components for candidate generation:
 import hashlib
 import logging
 import pickle
+import re
 from pathlib import Path
 from typing import Callable, List, Optional
 
@@ -810,6 +811,21 @@ class BM25CandidatesComponent:
     Alternative to LELA BM25 using the simpler rank-bm25 package.
     """
 
+    # Bumped whenever _tokenize changes, so cached indexes built with the old
+    # tokenization are not reused (they would silently mask the change).
+    TOKENIZER_VERSION = 3
+
+    @staticmethod
+    def _tokenize(text: str) -> List[str]:
+        """Split on non-alphanumerics so KB titles tokenize like mentions.
+
+        KB ids are often underscored ("Albert_Einstein"), which a plain
+        ``split()`` keeps as a single token that no mention can ever match.
+        The underscore must be listed explicitly: ``\\W`` counts it as a word
+        character, so ``\\W+`` alone leaves "albert_einstein" intact.
+        """
+        return [t for t in re.split(r"[\W_]+", text.lower()) if t]
+
     def __init__(
         self,
         nlp: Language,
@@ -854,7 +870,7 @@ class BM25CandidatesComponent:
         cache_hash = None
         cache_file = None
         if cache_dir and hasattr(kb, "identity_hash"):
-            raw = f"bm25:{kb.identity_hash}".encode()
+            raw = f"bm25:v{self.TOKENIZER_VERSION}:{kb.identity_hash}".encode()
             cache_hash = hashlib.sha256(raw).hexdigest()
             idx_dir = Path(cache_dir) / "index"
             idx_dir.mkdir(parents=True, exist_ok=True)
@@ -876,8 +892,7 @@ class BM25CandidatesComponent:
         self.corpus = []
         for entity in self.entities:
             text = f"{entity.title} {entity.description or ''}"
-            tokens = text.lower().split()
-            self.corpus.append(tokens)
+            self.corpus.append(self._tokenize(text))
 
         self.bm25 = BM25Okapi(self.corpus)
         logger.info(f"rank-bm25 index built over {len(self.entities)} entities")
@@ -911,7 +926,7 @@ class BM25CandidatesComponent:
                     progress, f"Generating candidates {i+1}/{num_entities}: {ent_text}"
                 )
 
-            query_tokens = ent.text.lower().split()
+            query_tokens = self._tokenize(ent.text)
             scores = self.bm25.get_scores(query_tokens)
 
             # Get top-k indices

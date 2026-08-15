@@ -12,22 +12,23 @@ license-files = ["LICENSE"]
 authors = [{ name = "Samy Haffoudhi" }]
 dependencies = [
     "beautifulsoup4>=4.14.3",
-    "bm25s>=0.2.14",
+    "bm25s>=0.3.10",
     "faiss-cpu>=1.13.2",
-    "gliner>=0.2.24",
-    "pdfplumber>=0.11.9",
+    "gliner>=0.2.28",
+    "pdfplumber>=0.11.10",
     "pystemmer>=3.0.0",
     "python-docx>=1.2.0",
     "rank-bm25>=0.2.2",
-    "rapidfuzz==3.14.3",
-    "sentence-transformers>=5.2.2",
-    "spacy>=3.8.11",
+    "rapidfuzz==3.14.5",
+    "sentence-transformers>=5.7.0",
+    "spacy>=3.8.15",
     "transformers>=5.13.0",
 ]
 
 [project.optional-dependencies]
-ui = ["gradio>=6.5.1"]
-vllm = ["vllm>=0.26.0"]
+ui = ["gradio>=6.24.0"]
+# vLLM 0.27.x cannot load Gemma 4 on transformers 5.15+ (vllm-project/vllm#51744)
+vllm = ["vllm>=0.26.0", "transformers<5.15"]
 
 [project.scripts]
 lela = "lela.cli:main"
