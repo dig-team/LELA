@@ -37,20 +37,31 @@ from lela.defaults import (
 )
 from lela.llm_pool import clear_all_models
 
-TITLE_HTML = """
+_BADGE_STYLE = (
+    "display:inline-flex;align-items:center;gap:4px;padding:3px 10px;"
+    "border-radius:6px;background:#f3f4f6;color:#1f2937;text-decoration:none;"
+    "font-size:0.85em;border:1px solid #d1d5db;"
+)
+
+_GITHUB_SVG = '<svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>'
+
+_ARXIV_SVG = '<svg height="16" width="12" viewBox="0 0 17.732 24.269" xmlns="http://www.w3.org/2000/svg"><path d="M573.549,280.916l2.266,2.738,6.674-7.84c.353-.47.52-.717.353-1.117a1.218,1.218,0,0,0-1.061-.748h0a.953.953,0,0,0-.712.262Z" transform="translate(-566.984 -271.548)" fill="#bdb9b4"/><path d="M579.525,282.225l-10.606-10.174a1.413,1.413,0,0,0-.834-.5,1.09,1.09,0,0,0-1.027.66c-.167.4-.047.681.319,1.206l8.44,10.242h0l-6.282,7.716a1.336,1.336,0,0,0-.323,1.3,1.114,1.114,0,0,0,1.04.69A.992.992,0,0,0,571,293l8.519-7.92A1.924,1.924,0,0,0,579.525,282.225Z" transform="translate(-566.984 -271.548)" fill="#b31b1b"/><path d="M584.32,293.912l-8.525-10.275,0,0L573.53,280.9l-1.389,1.254a2.063,2.063,0,0,0,0,2.965l10.812,10.419a.925.925,0,0,0,.742.282,1.039,1.039,0,0,0,.953-.667A1.261,1.261,0,0,0,584.32,293.912Z" transform="translate(-566.984 -271.548)" fill="#bdb9b4"/></svg>'
+
+
+def _badge(href: str, icon: str, label: str) -> str:
+    return (
+        f'<a href="{href}" target="_blank" style="{_BADGE_STYLE}">'
+        f"{icon}\n      {label}\n    </a>"
+    )
+
+
+TITLE_HTML = f"""
 <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:4px;">
   <h1 style="margin:0;font-size:1.8em;">LELA: An End-to-End LLM-Based Entity Linking Framework with Zero-Shot Domain Adaptation</h1>
-  <div style="display:flex;gap:8px;align-items:center;">
-    <a href="https://github.com/samyhaff/LELA" target="_blank"
-       style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;background:#f3f4f6;color:#1f2937;text-decoration:none;font-size:0.85em;border:1px solid #d1d5db;">
-      <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-      GitHub
-    </a>
-    <a href="https://arxiv.org/abs/2601.05192" target="_blank"
-       style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;background:#f3f4f6;color:#1f2937;text-decoration:none;font-size:0.85em;border:1px solid #d1d5db;">
-      <svg height="16" width="12" viewBox="0 0 17.732 24.269" xmlns="http://www.w3.org/2000/svg"><path d="M573.549,280.916l2.266,2.738,6.674-7.84c.353-.47.52-.717.353-1.117a1.218,1.218,0,0,0-1.061-.748h0a.953.953,0,0,0-.712.262Z" transform="translate(-566.984 -271.548)" fill="#bdb9b4"/><path d="M579.525,282.225l-10.606-10.174a1.413,1.413,0,0,0-.834-.5,1.09,1.09,0,0,0-1.027.66c-.167.4-.047.681.319,1.206l8.44,10.242h0l-6.282,7.716a1.336,1.336,0,0,0-.323,1.3,1.114,1.114,0,0,0,1.04.69A.992.992,0,0,0,571,293l8.519-7.92A1.924,1.924,0,0,0,579.525,282.225Z" transform="translate(-566.984 -271.548)" fill="#b31b1b"/><path d="M584.32,293.912l-8.525-10.275,0,0L573.53,280.9l-1.389,1.254a2.063,2.063,0,0,0,0,2.965l10.812,10.419a.925.925,0,0,0,.742.282,1.039,1.039,0,0,0,.953-.667A1.261,1.261,0,0,0,584.32,293.912Z" transform="translate(-566.984 -271.548)" fill="#bdb9b4"/></svg>
-      Paper
-    </a>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    {_badge("https://github.com/dig-team/LELA", _GITHUB_SVG, "GitHub")}
+    {_badge("https://arxiv.org/abs/2605.26956", _ARXIV_SVG, "Demo paper (IJCAI-ECAI 2026)")}
+    {_badge("https://arxiv.org/abs/2601.05192", _ARXIV_SVG, "Full paper (ISWC 2026)")}
   </div>
 </div>
 """
