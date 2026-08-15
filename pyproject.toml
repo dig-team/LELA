@@ -22,12 +22,12 @@ dependencies = [
     "rapidfuzz==3.14.3",
     "sentence-transformers>=5.2.2",
     "spacy>=3.8.11",
-    "transformers>=5.5.0",
+    "transformers>=5.13.0",
 ]
 
 [project.optional-dependencies]
 ui = ["gradio>=6.5.1"]
-vllm = ["vllm>=0.20.0"]
+vllm = ["vllm>=0.26.0"]
 
 [project.scripts]
 lela = "lela.cli:main"
