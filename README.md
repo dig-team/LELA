@@ -9,6 +9,7 @@
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-≥3.10-blue.svg)](https://www.python.org)
 [![Conference](https://img.shields.io/badge/IJCAI--ECAI-2026_Demo-orange)](https://arxiv.org/abs/2605.26956)
+[![Conference](https://img.shields.io/badge/ISWC-2026_paper-orange)](https://arxiv.org/abs/2601.05192)
 [![YAGO Ecosystem](https://img.shields.io/badge/part_of-YAGO_ecosystem-yellow)](https://yago-knowledge.org/ecosystem)
 
 </div>
